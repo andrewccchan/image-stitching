@@ -62,10 +62,12 @@ void MSOP::outProd(vector<Mat>& Pl, vector<Mat>& Hl) {
 
 // REVIEW: Check no seg. fault in second for loop
 // Calculate corner strength and suppress low strength points
-void MSOP::findCandidates(vector<Mat>& Hl, Mat& fHM, vector<Point>& pts) {
+void MSOP::findCandidates(vector<Mat>& Hl, vector<Mat>& PlGu,
+                        float mag, vector<Corner>& pts) {
     cout << "Finding candidate points" << endl;
     int m = Hl[0].rows;
     int n = Hl[0].cols;
+    Mat fHM(m, n, CV_32F);
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
             float a0 = Hl[0].at<float>(i, j);
@@ -98,7 +100,15 @@ void MSOP::findCandidates(vector<Mat>& Hl, Mat& fHM, vector<Point>& pts) {
                 }
             }
             if (largest) {
-                pts.push_back(Point(j, i));
+                Corner c;
+                c.x = (float) j;
+                c.y = (float) i;
+                c.f = cenVal;
+                subPixelRefine(fHM, c);
+                calOrient(PlGu, c);
+                c.fullX = c.x * mag;
+                c.fullY = c.y * mag;
+                pts.push_back(c);
             }
         }
     }
@@ -113,24 +123,13 @@ bool cornerSortR(const Corner& a, const Corner& b) {
     return (a.r > b.r);
 }
 
-void MSOP::adapNonMaxSup(const Mat& f,
-    const vector<Point>& pts, vector<Corner>& nmCor) {
+void MSOP::adapNonMaxSup(vector<Corner>& cors, vector<Corner>& nmCor) {
     cout << "Applying adaptive non-max suppression" << endl;
-    // Construct Corner vector for sorting
-    vector<Corner> cors;
-    cors.resize(pts.size());
-    for (int i = 0; i < (int) pts.size(); i++) {
-        Corner tmp;
-        tmp.x = (float) pts[i].x;
-        tmp.y = (float) pts[i].y;
-        tmp.f = f.at<float>(pts[i].y, pts[i].x);
-        cors[i] = tmp;
-        // cout << tmp.x << " " << tmp.y << endl;
-    }
-    // Sort by f
+    // Sort corners by strength
     // REVIEW: Verify cors is decreasing
     std::sort(cors.begin(), cors.end(), cornerSortF);
     assert(cors[0].f >= cors[1].f);
+    // Assign each corner the r value
     // distance to the closest point with a greater score
     float crobust = 0.9; // paper's setting
     for (int i = 0; i < (int) cors.size(); i++) {
@@ -139,7 +138,11 @@ void MSOP::adapNonMaxSup(const Mat& f,
         for (int j = 0; j < i; j++) {
             Corner& cj = cors[j];
             if (c.f < crobust*cj.f) {
-                float dist = pow(c.x - cj.x, 2) + pow(c.y - cj.y ,2);
+                float cx = c.fullX;
+                float cy = c.fullY;
+                float cjx = cj.fullX;
+                float cjy = cj.fullY;
+                float dist = pow(cx - cjx, 2) + pow(cy - cjy ,2);
                 dist = pow(dist, 0.5);
                 if (dist < rmin)
                     rmin = dist;
@@ -160,46 +163,36 @@ void MSOP::adapNonMaxSup(const Mat& f,
         << " points remain, r = " << nmCor.back().r << endl;
 }
 
-void MSOP::subPixelRefine(const Mat& f, vector<Corner>& cor) {
-    cout << "Performing sub-pixel refinement" << endl;
-    for (int i = 0; i < (int) cor.size(); i++) {
-        Corner& c = cor[i];
-        int x = (int) round(c.x);
-        int y = (int) round(c.y);
-        float f00 = f.at<float>(y, x);
-        // Compute first order derivative
-        float fp[2];
-        fp[0] = (f.at<float>(y, x+1) - f.at<float>(y, x-1)) / 2;
-        fp[1] = (f.at<float>(y+1, x) - f.at<float>(y-1, x)) / 2;
-        Mat fpMat = Mat(2, 1, CV_32F, fp);
-        // Compute second order derivative
-        float fpp[2][2];
-        fpp[0][0] = (f.at<float>(y, x+1) + f.at<float>(y, x-1) - 2*f00);
-        fpp[0][1] = (f.at<float>(y-1, x-1) - f.at<float>(y-1, x+1));
-        fpp[0][1] = (fpp[0][1] + (f.at<float>(y+1, x+1) - f.at<float>(y+1, x-1)))/4;
-        fpp[1][0] = fpp[0][1];
-        fpp[1][1] = (f.at<float>(y+1, x) + f.at<float>(y-1, x) - 2*f00);
-        Mat fppMat = Mat(2, 2, CV_32F, fpp);
-        // Compute subpixel coor.
-        Mat sub = -1.0 * (fppMat.inv() *  fpMat);
-        // Save back
-        c.x += sub.at<float>(0, 0);
-        c.y += sub.at<float>(1, 0);
-    }
+void MSOP::subPixelRefine(const Mat& f, Corner& c) {
+    int x = (int) round(c.x);
+    int y = (int) round(c.y);
+    float f00 = f.at<float>(y, x);
+    // Compute first order derivative
+    float fp[2];
+    fp[0] = (f.at<float>(y, x+1) - f.at<float>(y, x-1)) / 2;
+    fp[1] = (f.at<float>(y+1, x) - f.at<float>(y-1, x)) / 2;
+    Mat fpMat = Mat(2, 1, CV_32F, fp);
+    // Compute second order derivative
+    float fpp[2][2];
+    fpp[0][0] = (f.at<float>(y, x+1) + f.at<float>(y, x-1) - 2*f00);
+    fpp[0][1] = (f.at<float>(y-1, x-1) - f.at<float>(y-1, x+1));
+    fpp[0][1] = (fpp[0][1] + (f.at<float>(y+1, x+1) - f.at<float>(y+1, x-1)))/4;
+    fpp[1][0] = fpp[0][1];
+    fpp[1][1] = (f.at<float>(y+1, x) + f.at<float>(y-1, x) - 2*f00);
+    Mat fppMat = Mat(2, 2, CV_32F, fpp);
+    // Compute subpixel coor.
+    Mat sub = -1.0 * (fppMat.inv() *  fpMat);
+    // Save back
+    c.x += sub.at<float>(0, 0);
+    c.y += sub.at<float>(1, 0);
 }
 
-void MSOP::calOrient(vector<Mat>& PlG, vector<Corner>& cor) {
-    cout << "Calculating orientation" << endl;
-    tensorConv(PlG, 4.5);
-    for (int i = 0; i < (int) cor.size(); i++) {
-        Corner& c = cor[i];
-        int x = (int) round(c.x);
-        int y = (int) round(c.y);
-        float b = PlG[1].at<float>(y, x);
-        float a = PlG[0].at<float>(y, x);
-        c.o = acos(a / sqrt(pow(a, 2) + pow(b, 2)));
-        // c.o = atan(PlG[1].at<float>(y, x) / PlG[0].at<float>(y, x));
-    }
+void MSOP::calOrient(vector<Mat>& PlG, Corner& c) {
+    int x = (int) round(c.x);
+    int y = (int) round(c.y);
+    float b = PlG[1].at<float>(y, x);
+    float a = PlG[0].at<float>(y, x);
+    c.o = acos(a / sqrt(pow(a, 2) + pow(b, 2)));
 }
 
 void MSOP::warp2Local(const Mat& glo, Mat& loc, float the, Point bias) {
@@ -250,14 +243,22 @@ void MSOP::calDescriptors(Mat& img, int mag, vector<Corner>& cor, vector<Descrip
 }
 
 // assume l is smaller than 1
-void MSOP::drawCorners(const Mat& img, int mag, const vector<Corner>& cor, const char* name) {
-    Mat canvas;
-    img.copyTo(canvas);
+void MSOP::drawCorners(const Mat& img, const vector<Corner>& cor,
+                        int numLayers, string name) {
+    vector<Mat> canvasVec;
+    canvasVec.resize(numLayers);
+    for (int i = 0; i < numLayers; i++) {
+        img.copyTo(canvasVec[i]);
+    }
     for (int i = 0; i < (int) cor.size(); i++) {
         const Corner& c = cor[i];
         float theta = c.o;
-        int cenX = (int) round(c.x * mag);
-        int cenY = (int) round(c.y * mag);
+        int cenX = (int) round(c.fullX);
+        int cenY = (int) round(c.fullY);
+        float mag = c.fullX / c.x;
+        int layN = (int) round(log(mag) / log(2));
+        Mat& canvas = canvasVec[layN];
+        // cout << layN << endl;
         Point cen = Point(cenX, cenY);
         // corners of the rect. in patch coor.
         float rc[2][4] = {{-20, 20, 20, -20}, {-20, -20, 20, 20}};
@@ -294,7 +295,10 @@ void MSOP::drawCorners(const Mat& img, int mag, const vector<Corner>& cor, const
         // Draw center
         circle(canvas, cen, 1, Scalar(255, 255, 255));
     }
-    imwrite(name, canvas);
+    for (int i = 0; i < numLayers; i++) {
+        char series = 48 + i;
+        imwrite(name+&series+".png", canvasVec[i]);
+    }
     cout << "Corners are written to image" << endl;
 }
 
@@ -310,12 +314,12 @@ void MSOP::drawCorners(const Mat& img, int mag, const vector<Corner>& cor, const
 // }
 
 template<typename T>
-void writePoints(const Mat& img, vector<T>& pts, int mag, const char* fileName) {
+void writePoints(const Mat& img, vector<T>& pts, const char* fileName) {
     Mat imgC;
     img.copyTo(imgC);
     for (int i = 0; i < (int) pts.size(); i++) {
-        int glbX = (int) pts[i].x * mag;
-        int glbY = (int) pts[i].y * mag;
+        int glbX = (int) pts[i].fullX;
+        int glbY = (int) pts[i].fullY;
         circle(imgC, Point(glbX, glbY), 1, Scalar(255, 0, 0));
     }
     imwrite(string(fileName), imgC);
@@ -348,35 +352,32 @@ void MSOP::extract(Mat img) {
     << imgPr.back().cols << endl;
 
     // Compure Harris matrix
+    vector<Corner> allCorners;
     cout << "Computing Harris matrix" << endl;
-    for (int l = 1; l < 2; l++) {
-    // for (int l = 0; l < (int) imgPr.size(); l++) {
+    // for (int l = 0; l < 1; l++) {
+    for (int l = 0; l < (int) imgPr.size(); l++) {
         Mat pImg = imgPr[l];
-        vector<Mat> Hl, PlG, PlGCopy;
+        vector<Mat> Hl, PlG, PlGu;
         Hl.resize(4);
         PlG.resize(2);
-        PlGCopy.resize(2);
+        PlGu.resize(2);
         // Calculate gradients
         calGrad(pImg, PlG[0], 0); // x-direction
         calGrad(pImg, PlG[1], 1); // y-direction
-        PlG[0].copyTo(PlGCopy[0]); // deep copy
-        PlG[1].copyTo(PlGCopy[1]); // REVIEW: Check no need to pre-allocate
+        PlG[0].copyTo(PlGu[0]); // deep copy
+        PlG[1].copyTo(PlGu[1]); // REVIEW: Check no need to pre-allocate
         tensorConv(PlG, sigD);
         outProd(PlG, Hl); // ourter product
         tensorConv(Hl, sigI);
-        // Collect candidate corners
-        Mat fHM = Mat::zeros(pImg.rows, pImg.cols, CV_32F);
-        vector<Point> pts;
-        findCandidates(Hl, fHM, pts);
-        writePoints<Point>(imgPr[0], pts, pow(2, l), "corner.png");
-        // Apply adaptive non-max suppression
-        vector<Corner> cor(nPts);
-        adapNonMaxSup(fHM, pts, cor);
-        writePoints<Corner>(imgPr[0], cor, pow(2, l), "corner_sup.png");
-        subPixelRefine(fHM, cor);
-        writePoints<Corner>(imgPr[0], cor, pow(2, l), "corner_refined.png");
-        calOrient(PlGCopy, cor);
-        drawCorners(imgPr[0], pow(2, l), cor, "corner_window.png");
-        // Generate desciptors from Corners
+        // Find candidates
+        tensorConv(PlGu, 4.5);
+        vector<Corner> cor;
+        findCandidates(Hl, PlGu, pow(2, l), cor);
+        // Add to corner holder
+        allCorners.insert(allCorners.end(), cor.begin(), cor.end());
     }
+    vector<Corner> nmCor; // non-max corners
+    adapNonMaxSup(allCorners, nmCor);
+    drawCorners(imgPr[0], nmCor, (int) imgPr.size(), "debug/lay_");
+    writePoints<Corner>(imgPr[0], nmCor, "debug/corner_sup.png");
 }

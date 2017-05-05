@@ -7,8 +7,10 @@ using namespace cv;
 using namespace std;
 
 struct Corner {
-    float x;
-    float y;
+    float x; // x-coor. in the down-sampled scale
+    float y; // y-coor. in the down-sampled scale
+    float fullX; // x-coor. in full scale
+    float fullY; // y-corr. in full scale
     float r; // radius
     float f; // strength
     float o; // orientation in theta
@@ -28,13 +30,13 @@ private:
     void tensorConv(vector<Mat>&, float);
     void calGrad(Mat&, Mat&, int);
     void outProd(vector<Mat>&, vector<Mat>&);
-    void findCandidates(vector<Mat>&, Mat&, vector<Point>&);
-    void adapNonMaxSup(const Mat&, const vector<Point>&, vector<Corner>&);
-    void subPixelRefine(const Mat&, vector<Corner>&);
-    void calOrient(vector<Mat>&, vector<Corner>&);
+    void findCandidates(vector<Mat>&, vector<Mat>&, float, vector<Corner>&);
+    void adapNonMaxSup(vector<Corner>&, vector<Corner>&);
+    void subPixelRefine(const Mat&, Corner&);
+    void calOrient(vector<Mat>&, Corner&);
     void calDescriptors(Mat&, int, vector<Corner>&, vector<Descriptor>&);
     void warp2Local(const Mat&, Mat&, float, Point = Point(0, 0));
-    void drawCorners(const Mat&, int, const vector<Corner>&, const char*);
+    void drawCorners(const Mat&, const vector<Corner>&, int, string);
     // void writePoints(const Mat&, vector<Point>&, int, const char*);
     // void writePoints(const Mat&, vector<Corner>&, int, const char*);
 
