@@ -5,5 +5,7 @@ int main() {
     // Load image
     // NOTE: Need to convert image to gray scale!!!
     Mat img = imread("./img/horse.png");
-    msop.extract(img);
+    vector<Descriptor> dsps;
+    msop.extract(img, dsps);
+
 }

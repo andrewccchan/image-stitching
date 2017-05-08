@@ -25,7 +25,7 @@ struct Descriptor {
 class MSOP {
 public:
     MSOP(int, float, float, float, int);
-    void extract(Mat);
+    void extract(Mat, vector<Descriptor>&);
 private:
     void tensorConv(vector<Mat>&, float);
     void calGrad(Mat&, Mat&, int);
@@ -34,7 +34,7 @@ private:
     void adapNonMaxSup(vector<Corner>&, vector<Corner>&);
     void subPixelRefine(const Mat&, Corner&);
     void calOrient(vector<Mat>&, Corner&);
-    void calDescriptors(Mat&, int, vector<Corner>&, vector<Descriptor>&);
+    void calDescriptors(Mat&, vector<Corner>&, vector<Descriptor>&);
     void warp2Local(const Mat&, Mat&, float, Point = Point(0, 0));
     void drawCorners(const Mat&, const vector<Corner>&, int, string);
     // void writePoints(const Mat&, vector<Point>&, int, const char*);

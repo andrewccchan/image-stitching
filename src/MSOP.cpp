@@ -206,8 +206,9 @@ void MSOP::warp2Local(const Mat& glo, Mat& loc, float the, Point bias) {
 }
 
 // Auume l is smaller than 1
-void MSOP::calDescriptors(Mat& img, int mag, vector<Corner>& cor, vector<Descriptor>& dsps) {
+void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsps) {
     cout << "Calculating Descriptors..." << endl;
+    // dsps.resize(cor.size());
     // Generate desciptors for each corner
     Mat imgB;
     // blur image. Var fixed to 4.5
@@ -230,18 +231,24 @@ void MSOP::calDescriptors(Mat& img, int mag, vector<Corner>& cor, vector<Descrip
         // REVIEW: Check the correctness of the angle
         warp2Local(pts, ptsLocal, -(M_PI/2 - the), Point(c.x, c.y));
         dsps.push_back(Descriptor());
-        Descriptor& tmpDsp = dsps[dsps.size() - 1];
+        Descriptor& tmpDsp = dsps.back();
         // Convert to original scale
-        tmpDsp.x = (int) round(c.x * mag);
-        tmpDsp.y = (int) round(c.y * mag);
+        tmpDsp.x = (int) c.fullX;
+        tmpDsp.y = (int) c.fullY;
+        bool invalid = false;
         for (int j = 0; j < 64; j++) {
             int ptX = (int) round(ptsLocal.at<float>(0, j));
             int ptY = (int) round(ptsLocal.at<float>(1, j));
-            tmpDsp.fea[j] = img.at<float>(ptY, ptX);
+            if (ptX < 0 || ptY < 0 || ptX >= imgB.cols || ptY >= imgB.rows) {
+                invalid = true;
+                break;
+            }
+            tmpDsp.fea[j] = imgB.at<float>(ptY, ptX);
         }
+        if (invalid)
+            dsps.pop_back();
     }
 }
-
 // assume l is smaller than 1
 void MSOP::drawCorners(const Mat& img, const vector<Corner>& cor,
                         int numLayers, string name) {
@@ -325,7 +332,7 @@ void writePoints(const Mat& img, vector<T>& pts, const char* fileName) {
     imwrite(string(fileName), imgC);
 }
 
-void MSOP::extract(Mat img) {
+void MSOP::extract(Mat img, vector<Descriptor>& desp) {
     // Convert image to gray scale and float
 
     // REVIEW: Check image order
@@ -380,4 +387,10 @@ void MSOP::extract(Mat img) {
     adapNonMaxSup(allCorners, nmCor);
     drawCorners(imgPr[0], nmCor, (int) imgPr.size(), "debug/lay_");
     writePoints<Corner>(imgPr[0], nmCor, "debug/corner_sup.png");
+    // Calculate descriptors
+    vector<Descriptor> tmpDsp;
+    for (int l = 0; l < (int) imgPr.size(); l++) {
+        calDescriptors(imgPr[l], nmCor, tmpDsp);
+        desp.insert(desp.end(), tmpDsp.begin(), tmpDsp.end());
+    }
 }
