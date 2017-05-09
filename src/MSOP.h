@@ -1,8 +1,11 @@
+#ifndef __MSOP_H__
+#define __MSOP_H__
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <cmath>
 #include <limits>
 #include <string>
+#include "common.h"
 using namespace cv;
 using namespace std;
 
@@ -16,11 +19,6 @@ struct Corner {
     float o; // orientation in theta
 };
 
-struct Descriptor {
-    int x; // x-coor. in  global coordinate
-    int y; // y-coor. in  gloabl coordinate
-    float fea[64];
-};
 
 class MSOP {
 public:
@@ -47,3 +45,4 @@ private:
     float   sigI;
     int     nPts; // number of sample points
 };
+#endif

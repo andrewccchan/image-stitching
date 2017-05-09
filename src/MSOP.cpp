@@ -207,7 +207,6 @@ void MSOP::warp2Local(const Mat& glo, Mat& loc, float the, Point bias) {
 
 // Auume l is smaller than 1
 void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsps) {
-    cout << "Calculating Descriptors..." << endl;
     // dsps.resize(cor.size());
     // Generate desciptors for each corner
     Mat imgB;
@@ -236,6 +235,8 @@ void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsp
         tmpDsp.x = (int) c.fullX;
         tmpDsp.y = (int) c.fullY;
         bool invalid = false;
+        float accu = 0;
+        float accu2 = 0; // accumulator for the square
         for (int j = 0; j < 64; j++) {
             int ptX = (int) round(ptsLocal.at<float>(0, j));
             int ptY = (int) round(ptsLocal.at<float>(1, j));
@@ -243,10 +244,19 @@ void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsp
                 invalid = true;
                 break;
             }
-            tmpDsp.fea[j] = imgB.at<float>(ptY, ptX);
+            float tmp = imgB.at<float>(ptY, ptX);
+            tmpDsp.fea[j] = tmp;
+            accu += tmp;
+            accu2 += pow(tmp ,2);
         }
         if (invalid)
             dsps.pop_back();
+        // normalization
+        float mu = accu / 64;
+        float sig = sqrt(accu2 / 64 - pow(mu, 2));
+        for (int j = 0; j < 64; j++) {
+            tmpDsp.fea[j] = (tmpDsp.fea[j] - mu) / sig;
+        }
     }
 }
 // assume l is smaller than 1
@@ -388,6 +398,7 @@ void MSOP::extract(Mat img, vector<Descriptor>& desp) {
     drawCorners(imgPr[0], nmCor, (int) imgPr.size(), "debug/lay_");
     writePoints<Corner>(imgPr[0], nmCor, "debug/corner_sup.png");
     // Calculate descriptors
+    cout << "Calculating Descriptors..." << endl;
     vector<Descriptor> tmpDsp;
     for (int l = 0; l < (int) imgPr.size(); l++) {
         calDescriptors(imgPr[l], nmCor, tmpDsp);
