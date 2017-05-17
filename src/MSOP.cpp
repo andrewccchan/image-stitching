@@ -1,5 +1,5 @@
 #include "MSOP.h"
-
+#include "kdtree.h"
 
 static void showImg(const Mat& img) {
     double min, max;
@@ -37,7 +37,7 @@ MSOP::MSOP(int s, float sp, float sd, float si, int n):
 // vatriace = sig in place
 void MSOP::tensorConv(vector<Mat>& m, float sig) {
     for (int i = 0; i < (int) m.size(); i++) {
-        GaussianBlur(m[i], m[i], Size(0,0), sig, 0);
+        GaussianBlur(m[i], m[i], Size(0,0), sig, sig);
     }
 }
 
@@ -60,6 +60,9 @@ void MSOP::outProd(vector<Mat>& Pl, vector<Mat>& Hl) {
     Hl[3] = Pl[1].mul(Pl[1]);
 }
 
+bool onBorder(int i, int j, int m, int n){
+  return i <= 0 || i >= m - 1 || j <= 0 || j >= n - 1;
+}
 // REVIEW: Check no seg. fault in second for loop
 // Calculate corner strength and suppress low strength points
 void MSOP::findCandidates(vector<Mat>& Hl, vector<Mat>& PlGu,
@@ -84,7 +87,7 @@ void MSOP::findCandidates(vector<Mat>& Hl, vector<Mat>& PlGu,
     for (int i = 0; i < m; i++) {
         for (int j = 0; j < n; j++) {
             float cenVal = fHM.at<float>(i, j);
-            // cout << cenVal << endl;
+
             if (cenVal < 10 or cenVal != cenVal)
                 continue;
             bool largest = true;
@@ -92,23 +95,28 @@ void MSOP::findCandidates(vector<Mat>& Hl, vector<Mat>& PlGu,
                 for (int jj = -3; jj < 4; jj++) {
                     // Check boundaries
                     int y = ((ii + i) < 0) ? 0 : (ii + i);
-                    y = (y > m) ? m : y;
+                    y = (y >= m) ? m - 1 : y;
                     int x = ((jj + j) < 0) ? 0 : (jj + j);
-                    x = (x > n) ? n : x;
-                    if (ii != 0 &&  jj != 0 && cenVal <= fHM.at<float>(y, x))
+                    x = (x >= n) ? n - 1 : x;
+                    if (ii != 0 && jj != 0 && cenVal <= fHM.at<float>(y, x))
                         largest = false;
                 }
             }
-            if (largest) {
+
+            // Must ensure that the point is not on the border since
+            // "subPixelRefine" uses its neighbors
+            if (largest && !onBorder(i, j, m, n)) {
                 Corner c;
                 c.x = (float) j;
                 c.y = (float) i;
                 c.f = cenVal;
                 subPixelRefine(fHM, c);
-                calOrient(PlGu, c);
-                c.fullX = c.x * mag;
-                c.fullY = c.y * mag;
-                pts.push_back(c);
+                if (!onBorder(c.x, c.y, m, n)) {
+                  calOrient(PlGu, c);
+                  c.fullX = c.x * mag;
+                  c.fullY = c.y * mag;
+                  pts.push_back(c);
+                }
             }
         }
     }
@@ -123,35 +131,48 @@ bool cornerSortR(const Corner& a, const Corner& b) {
     return (a.r > b.r);
 }
 
-void MSOP::adapNonMaxSup(vector<Corner>& cors, vector<Corner>& nmCor) {
+void MSOP::adapNonMaxSup(vector<Corner>& cors, vector<Corner>& nmCor, bool fast = true) {
     cout << "Applying adaptive non-max suppression" << endl;
     // Sort corners by strength
-    // REVIEW: Verify cors is decreasing
     std::sort(cors.begin(), cors.end(), cornerSortF);
-    assert(cors[0].f >= cors[1].f);
+
     // Assign each corner the r value
     // distance to the closest point with a greater score
     float crobust = 0.9; // paper's setting
-    for (int i = 0; i < (int) cors.size(); i++) {
+    if (!fast) {
+      // brute-force method
+      for (int i = 0; i < (int) cors.size(); i++) {
         Corner& c = cors[i];
         float rmin = numeric_limits<float>::max();
         for (int j = 0; j < i; j++) {
-            Corner& cj = cors[j];
-            if (c.f < crobust*cj.f) {
-                float cx = c.fullX;
-                float cy = c.fullY;
-                float cjx = cj.fullX;
-                float cjy = cj.fullY;
-                float dist = pow(cx - cjx, 2) + pow(cy - cjy ,2);
-                dist = pow(dist, 0.5);
-                if (dist < rmin)
-                    rmin = dist;
-            }
-            // cout << i << " " << j << endl;
+          Corner& cj = cors[j];
+          if (c.f < crobust*cj.f) {
+            float cx = c.fullX;
+            float cy = c.fullY;
+            float cjx = cj.fullX;
+            float cjy = cj.fullY;
+            float dist = hypot(cx - cjx, cy - cjy);
+            if (dist < rmin)
+              rmin = dist;
+          }
         }
         c.r = rmin;
         assert(cors[i].r == rmin);
+      }
+    } else {
+      // nearest neighbor with kd-tree
+      kd_tree kdTree;
+      auto ptr = cors.begin() ;
+      for (auto &&cor : cors) {
+        while (ptr != cors.end() && crobust * ptr->f > cor.f) {
+          kdTree.insert(kd_tree::point(ptr->fullX, ptr->fullY));
+          ptr ++;
+        }
+        cor.r = kdTree.nearest(kd_tree::point(cor.fullX, cor.fullY));
+      }
+      kdTree.clear();
     }
+
     // Sort by r
     // REVIEW: Does not consider equal values (r)
     std::sort(cors.begin(), cors.end(), cornerSortR);
@@ -188,8 +209,8 @@ void MSOP::subPixelRefine(const Mat& f, Corner& c) {
 }
 
 void MSOP::calOrient(vector<Mat>& PlG, Corner& c) {
-    int x = (int) round(c.x);
-    int y = (int) round(c.y);
+    int x = (int)c.x;
+    int y = (int)c.y;
     float b = PlG[1].at<float>(y, x);
     float a = PlG[0].at<float>(y, x);
     c.o = acos(a / sqrt(pow(a, 2) + pow(b, 2)));
@@ -211,7 +232,7 @@ void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsp
     // Generate desciptors for each corner
     Mat imgB;
     // blur image. Var fixed to 4.5
-    GaussianBlur(img, imgB, Size(0,0), 4.5, 0);
+    GaussianBlur(img, imgB, Size(0,0), 4.5, 4.5);
     for (int i = 0; i < (int) cor.size(); i++) {
         Corner& c = cor[i];
         float the = c.o;
@@ -220,8 +241,8 @@ void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsp
         int cnt = 0;
         for (int m = -17; m <= 18; m += 5) {
             for (int n = -17; n <= 18; n += 5) {
-                pts.at<float>(0, cnt) = c.x + n;
-                pts.at<float>(1, cnt) = c.y + m;
+                pts.at<float>(0, cnt) = n;
+                pts.at<float>(1, cnt) = m;
                 cnt++;
             }
         }
@@ -241,6 +262,7 @@ void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsp
             int ptX = (int) round(ptsLocal.at<float>(0, j));
             int ptY = (int) round(ptsLocal.at<float>(1, j));
             if (ptX < 0 || ptY < 0 || ptX >= imgB.cols || ptY >= imgB.rows) {
+              // printf( "%d %d in %d %d\n" , ptX, ptY, imgB.cols, imgB.rows);
                 invalid = true;
                 break;
             }
@@ -249,8 +271,10 @@ void MSOP::calDescriptors(Mat& img, vector<Corner>& cor, vector<Descriptor>& dsp
             accu += tmp;
             accu2 += pow(tmp ,2);
         }
-        if (invalid)
-            dsps.pop_back();
+        if (invalid) {
+          dsps.pop_back();
+          continue;
+        }
         // normalization
         float mu = accu / 64;
         float sig = sqrt(accu2 / 64 - pow(mu, 2));
@@ -304,13 +328,13 @@ void MSOP::drawCorners(const Mat& img, const vector<Corner>& cor,
             }
         }
         // Draw lines
-        line(canvas, cornPts[0], cornPts[1], Scalar(255, 255, 255), 2);
-        line(canvas, cornPts[1], cornPts[2], Scalar(255, 255, 255), 2);
-        line(canvas, cornPts[2], cornPts[3], Scalar(255, 255, 255), 2);
-        line(canvas, cornPts[3], cornPts[0], Scalar(255, 255, 255), 2);
-        line(canvas, cen, corrPts, Scalar(255, 255, 255), 2);
+        line(canvas, cornPts[0], cornPts[1], Scalar(0, 0, 255), 2);
+        line(canvas, cornPts[1], cornPts[2], Scalar(0, 0, 255), 2);
+        line(canvas, cornPts[2], cornPts[3], Scalar(0, 0, 255), 2);
+        line(canvas, cornPts[3], cornPts[0], Scalar(0, 0, 255), 2);
+        line(canvas, cen, corrPts, Scalar(0, 0, 255), 2);
         // Draw center
-        circle(canvas, cen, 1, Scalar(255, 255, 255));
+        circle(canvas, cen, 1, Scalar(0, 0, 255));
     }
     for (int i = 0; i < numLayers; i++) {
         char series = 48 + i;
@@ -356,7 +380,7 @@ void MSOP::extract(Mat img, vector<Descriptor>& desp) {
     imgPr.push_back(img);
     while (1) {
         // Size(0, 0) => size is determined by sigP.
-        GaussianBlur(imgDown, imgDown, Size(0, 0), sigP, 0);
+        GaussianBlur(imgDown, imgDown, Size(0, 0), sigP, sigP);
         resize(imgDown, imgDown, Size(0, 0), 1.0/subRate, 1.0/subRate);
         if ((float) imgDown.rows / img.rows < minScale)
             break;
@@ -399,9 +423,10 @@ void MSOP::extract(Mat img, vector<Descriptor>& desp) {
     writePoints<Corner>(imgPr[0], nmCor, "debug/corner_sup.png");
     // Calculate descriptors
     cout << "Calculating Descriptors..." << endl;
-    vector<Descriptor> tmpDsp;
     for (int l = 0; l < (int) imgPr.size(); l++) {
+        vector<Descriptor> tmpDsp;
         calDescriptors(imgPr[l], nmCor, tmpDsp);
+        printf( "tmpdsp size: %d\n" , (int)tmpDsp.size() ) ;
         desp.insert(desp.end(), tmpDsp.begin(), tmpDsp.end());
     }
 }

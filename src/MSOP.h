@@ -29,7 +29,7 @@ private:
     void calGrad(Mat&, Mat&, int);
     void outProd(vector<Mat>&, vector<Mat>&);
     void findCandidates(vector<Mat>&, vector<Mat>&, float, vector<Corner>&);
-    void adapNonMaxSup(vector<Corner>&, vector<Corner>&);
+    void adapNonMaxSup(vector<Corner>&, vector<Corner>&, bool);
     void subPixelRefine(const Mat&, Corner&);
     void calOrient(vector<Mat>&, Corner&);
     void calDescriptors(Mat&, vector<Corner>&, vector<Descriptor>&);

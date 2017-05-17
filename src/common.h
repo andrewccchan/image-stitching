@@ -5,6 +5,7 @@
 // classes and types in the project.
 // #########################################
 #include <vector>
+using namespace std;
 
 // Descriptor for interest points
 struct Descriptor {
@@ -19,6 +20,8 @@ typedef vector<Descriptor> FeatPts;
 struct MatchPts {
     Descriptor* dsp1;
     Descriptor* dsp2;
+    MatchPts(Descriptor *x, Descriptor *y) :
+      dsp1(x), dsp2(y) {}
 };
 
 #endif

@@ -1,0 +1,13 @@
+./img/plaza2/photo_2017-05-17_21-12-42.jpg 1514.213
+./img/plaza2/photo_2017-05-17_21-12-43.jpg 1514.14
+./img/plaza2/photo_2017-05-17_21-12-45.jpg 1513.768
+./img/plaza2/photo_2017-05-17_21-12-46.jpg 1513.436
+./img/plaza2/photo_2017-05-17_21-12-48.jpg 1512.711
+./img/plaza2/photo_2017-05-17_21-12-49.jpg 1511.764
+./img/plaza2/photo_2017-05-17_21-12-51.jpg 1510.379
+./img/plaza2/photo_2017-05-17_21-12-53.jpg 1512.038
+./img/plaza2/photo_2017-05-17_21-12-54.jpg 1512.044
+./img/plaza2/photo_2017-05-17_21-12-55.jpg 1511.35
+./img/plaza2/photo_2017-05-17_21-12-57.jpg 1511.29
+./img/plaza2/photo_2017-05-17_21-12-58.jpg 1510.816
+./img/plaza2/photo_2017-05-17_21-13-00.jpg 1511.432

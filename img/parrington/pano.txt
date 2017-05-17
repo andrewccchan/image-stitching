@@ -1,0 +1,19 @@
+./img/parrington/prtn00.jpg 704.916
+./img/parrington/prtn01.jpg 706.286
+./img/parrington/prtn02.jpg 705.849
+./img/parrington/prtn03.jpg 706.645
+./img/parrington/prtn04.jpg 706.587
+./img/parrington/prtn05.jpg 705.645
+./img/parrington/prtn06.jpg 705.327
+./img/parrington/prtn07.jpg 704.696
+./img/parrington/prtn08.jpg 703.794
+./img/parrington/prtn09.jpg 704.325
+./img/parrington/prtn10.jpg 704.696
+./img/parrington/prtn11.jpg 703.895
+./img/parrington/prtn12.jpg 704.289
+./img/parrington/prtn13.jpg 704.676
+./img/parrington/prtn14.jpg 704.847
+./img/parrington/prtn15.jpg 704.537
+./img/parrington/prtn16.jpg 705.102
+./img/parrington/prtn17.jpg 705.576
+
