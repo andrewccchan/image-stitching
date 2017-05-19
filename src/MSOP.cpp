@@ -111,7 +111,7 @@ void MSOP::findCandidates(vector<Mat>& Hl, vector<Mat>& PlGu,
                 c.y = (float) i;
                 c.f = cenVal;
                 subPixelRefine(fHM, c);
-                if (!onBorder(c.x, c.y, m, n)) {
+                if (!onBorder(c.y, c.x, m, n)) {
                   calOrient(PlGu, c);
                   c.fullX = c.x * mag;
                   c.fullY = c.y * mag;

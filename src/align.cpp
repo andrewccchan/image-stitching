@@ -35,9 +35,10 @@ void AlignWithFeatures::getPairwiseShift(Mat &img1, Mat &img2, vector<Descriptor
   printf( "feature sizes %d --- %d\n" , (int)feat1.size() , (int)feat2.size() );
   Mat feat1_mat((int)feat1.size(), 64, CV_32F);
   Mat feat2_mat((int)feat2.size(), 64, CV_32F);
-  for (size_t i = 0; i < feat1.size(); i ++)
+  for (size_t i = 0; i < feat1.size(); i ++) {
     for (int j = 0; j < 64; j ++)
       feat1_mat.at<float>(i, j) = feat1[i].fea[j];
+  }
   for (size_t i = 0; i < feat2.size(); i ++)
     for (int j = 0; j < 64; j ++)
       feat2_mat.at<float>(i, j) = feat2[i].fea[j];
@@ -47,7 +48,7 @@ void AlignWithFeatures::getPairwiseShift(Mat &img1, Mat &img2, vector<Descriptor
   flann::Index fnn2(feat2_mat, fnn_param);
   vector<MatchPts> match_pts;
 
-  Mat compare = Mat::zeros(img1.rows, img1.cols +img2.cols, CV_8UC3);
+  Mat compare = Mat::zeros(max(img1.rows, img2.rows), img1.cols +img2.cols, CV_8UC3);
 
   for(int i = 0; i < img1.rows; i++)
     for(int j = 0; j < img1.cols; j++)
@@ -96,8 +97,8 @@ void AlignWithFeatures::getPairwiseShift(Mat &img1, Mat &img2, vector<Descriptor
   imwrite("match2.jpg", img2_match);
 
   // Compute optimal shift with RANSAC
-  const int ITER = 1000;
-  const int samples = 4;
+  const int ITER = 2000;
+  const int samples = 5;
   const float threshold = 5;
 
   int inlier_max = 0;

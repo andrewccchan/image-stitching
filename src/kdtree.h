@@ -1,5 +1,5 @@
-#ifndef SUNMOON_DYNAMIC_KD_TREE
-#define SUNMOON_DYNAMIC_KD_TREE
+#ifndef DYNAMIC_KD_TREE
+#define DYNAMIC_KD_TREE
 #include <algorithm>
 #include <cmath>
 #include <queue>

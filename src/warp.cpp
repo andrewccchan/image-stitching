@@ -31,7 +31,7 @@ Vec3f bilinearInter(Mat &img, float i, float j) {
   return (1 - v) * (1 - u) * a + v * (1 - u) * b + (1 - v) * u * c + v * u * d;
 }
 
-void warp(Mat &input, Mat &output, float focal_length) {
+void warp(Mat &input, Mat &output, float focal_length, float distortion) {
   Mat inputf; // float version of the input matrix
   input.convertTo(inputf, CV_32FC3);
 
@@ -44,7 +44,7 @@ void warp(Mat &input, Mat &output, float focal_length) {
       float theta = (j - (float)output.cols / 2) / focal_length;
       float height = (i - (float)output.rows / 2) / focal_length;
 
-      float pos_x = tan(theta) * focal_length + (float)inputf.cols / 2;
+      float pos_x = tan(theta) * focal_length * (1 + distortion * ((float)i / (output.rows - 1)))+ (float)inputf.cols / 2;
       float pos_y = height * hypot(pos_x - (float)inputf.cols / 2, focal_length) + (float)inputf.rows / 2;
 
       output.at<Vec3f>(i, j) = bilinearInter(inputf, pos_y, pos_x);
